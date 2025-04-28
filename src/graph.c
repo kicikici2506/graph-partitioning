@@ -467,18 +467,18 @@ int save_graph_division(const char* filename, const Graph* graph,
 void print_graph_info(const Graph* graph) {
     if (!graph) return;
 
-    printf("\nGraph Information:\n");
+    printf("\nInformacje o grafie:\n");
     printf("----------------\n");
-    printf("Total vertices: %d\n", graph->total_vertices);
-    printf("Maximum vertices per row: %d\n", graph->max_vertices);
-    printf("Number of rows: %d\n", graph->num_rows);
+    printf("Całkowita liczba wierzchołków: %d\n", graph->total_vertices);
+    printf("Maksymalna liczba wierzchołków w wierszu: %d\n", graph->max_vertices);
+    printf("Liczba wierszy: %d\n", graph->num_rows);
     
     // Wyświetl informacje o wierszach
-    printf("\nRow structure:\n");
+    printf("\nStruktura wierszy:\n");
     for (int i = 0; i < graph->num_rows; i++) {
         int start = graph->row_pointers[i];
         int end = (i < graph->num_rows - 1) ? graph->row_pointers[i + 1] : graph->total_vertices;
-        printf("Row %d (vertices %d-%d):", i + 1, start + 1, end);
+        printf("Wiersz %d (wierzchołki %d-%d):", i + 1, start + 1, end);
         for (int j = start; j < end; j++) {
             printf(" %d", graph->vertex_indices[j]);
         }
@@ -500,16 +500,16 @@ void print_graph_info(const Graph* graph) {
     total_edges /= 2; // Każda krawędź była liczona dwukrotnie
     avg_degree = (double)total_edges * 2 / graph->total_vertices;
 
-    printf("\nConnectivity statistics:\n");
-    printf("Total edges: %d\n", total_edges);
-    printf("Maximum vertex degree: %d\n", max_degree);
-    printf("Average vertex degree: %.2f\n", avg_degree);
+    printf("\nStatystyki połączeń:\n");
+    printf("Całkowita liczba krawędzi: %d\n", total_edges);
+    printf("Maksymalny stopień wierzchołka: %d\n", max_degree);
+    printf("Średni stopień wierzchołka: %.2f\n", avg_degree);
 }
 
 void print_division_info(const VertexGroup* groups, int num_groups) {
     if (!groups || num_groups <= 0) return;
 
-    printf("\nDivision Information:\n");
+    printf("\nInformacje o podziale:\n");
     printf("-------------------\n");
     
     // Statystyki grup
@@ -527,10 +527,10 @@ void print_division_info(const VertexGroup* groups, int num_groups) {
 
     // Wyświetl informacje o każdej grupie
     for (int i = 0; i < num_groups; i++) {
-        printf("\nGroup %d:\n", i + 1);
-        printf("  Size: %d vertices\n", groups[i].count);
-        printf("  First vertex index: %d\n", groups[i].first_vertex);
-        printf("  Vertices:");
+        printf("\nGrupa %d:\n", i + 1);
+        printf("  Rozmiar: %d wierzchołków\n", groups[i].count);
+        printf("  Indeks pierwszego wierzchołka: %d\n", groups[i].first_vertex);
+        printf("  Wierzchołki:");
         
         // Wyświetl maksymalnie 10 pierwszych wierzchołków w grupie
         int display_count = groups[i].count > 10 ? 10 : groups[i].count;
@@ -538,17 +538,17 @@ void print_division_info(const VertexGroup* groups, int num_groups) {
             printf(" %d", groups[i].vertices[j]);
         }
         if (groups[i].count > 10) {
-            printf(" ... (%d more)", groups[i].count - 10);
+            printf(" ... (pozostałe %d)", groups[i].count - 10);
         }
         printf("\n");
     }
 
     // Wyświetl statystyki podziału
-    printf("\nDivision statistics:\n");
-    printf("Minimum group size: %d\n", min_size);
-    printf("Maximum group size: %d\n", max_size);
-    printf("Average group size: %.2f\n", avg_size);
-    printf("Size difference: %.2f%%\n", ((double)(max_size - min_size) / min_size) * 100.0);
+    printf("\nStatystyki podziału:\n");
+    printf("Minimalna wielkość grupy: %d wierzchołków\n", min_size);
+    printf("Maksymalna wielkość grupy: %d wierzchołków\n", max_size);
+    printf("Średnia wielkość grupy: %.2f wierzchołków\n", avg_size);
+    printf("Różnica wielkości: %.2f%%\n", ((double)(max_size - min_size) / min_size) * 100.0);
 }
 
 // Funkcja obliczająca różnicę wielkości między grupami

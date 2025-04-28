@@ -4,11 +4,10 @@
 #include "../include/graph.h"
 
 void print_usage(const char* program_name) {
-    printf("Usage: %s <input_file> [num_parts] [margin_percentage] [-b]\n", program_name);
-    printf("  input_file        - path to the input graph file\n");
-    printf("  num_parts         - number of parts to divide the graph into (default: 2)\n");
-    printf("  margin_percentage - maximum allowed size difference between parts in %% (default: 10.0)\n");
-    printf("  -b               - output in binary format (optional)\n");
+    printf("Użycie: %s <plik_wejściowy> [liczba_części] [margines_procentowy]\n", program_name);
+    printf("  plik_wejściowy     - ścieżka do pliku z grafem wejściowym\n");
+    printf("  liczba_części      - liczba części na które podzielić graf (domyślnie: 2)\n");
+    printf("  margines_procentowy - maksymalna dozwolona różnica wielkości między częściami w %% (domyślnie: 10.0)\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -30,13 +29,13 @@ int main(int argc, char *argv[]) {
         } else if (i == 2 && argv[i][0] != '-') {
             num_parts = atoi(argv[i]);
             if (num_parts <= 0) {
-                fprintf(stderr, "Error: Number of parts must be positive\n");
+                fprintf(stderr, "Błąd: Liczba części musi być dodatnia\n");
                 return 1;
             }
         } else if (i == 3 && argv[i][0] != '-') {
             margin_percentage = atof(argv[i]);
             if (margin_percentage < 0) {
-                fprintf(stderr, "Error: Margin percentage must be non-negative\n");
+                fprintf(stderr, "Błąd: Margines procentowy nie może być ujemny\n");
                 return 1;
             }
         }
@@ -45,7 +44,7 @@ int main(int argc, char *argv[]) {
     // Wczytaj graf
     Graph* graph = NULL;
     if (load_graph_from_file(input_file, &graph) != 0) {
-        fprintf(stderr, "Error: Failed to load graph from file: %s\n", input_file);
+        fprintf(stderr, "Błąd: Nie udało się wczytać grafu z pliku: %s\n", input_file);
         return 1;
     }
 
@@ -55,7 +54,7 @@ int main(int argc, char *argv[]) {
     // Podziel graf
     VertexGroup* groups = NULL;
     if (divide_graph(graph, num_parts, margin_percentage, &groups) != 0) {
-        fprintf(stderr, "Error: Failed to divide graph\n");
+        fprintf(stderr, "Błąd: Nie udało się podzielić grafu\n");
         destroy_graph(graph);
         return 1;
     }
@@ -63,7 +62,7 @@ int main(int argc, char *argv[]) {
     // Sprawdź różnicę rozmiaru między grupami
     double size_diff = calculate_size_difference(groups, num_parts);
     if (size_diff > margin_percentage) {
-        printf("Warning: Size difference (%.2f%%) exceeds specified margin (%.2f%%)\n",
+        printf("Uwaga: Różnica wielkości (%.2f%%) przekracza określony margines (%.2f%%)\n",
                size_diff, margin_percentage);
     }
 
@@ -72,15 +71,15 @@ int main(int argc, char *argv[]) {
 
     // Wyświetl informacje o podziale
     print_division_info(groups, num_parts);
-    printf("Cross-edges between groups: %d\n", cross_edges);
-    printf("Size difference between groups: %.2f%%\n", size_diff);
+    printf("Liczba krawędzi między grupami: %d\n", cross_edges);
+    printf("Różnica wielkości między grupami: %.2f%%\n", size_diff);
 
     // Zapisz wynik do pliku
     const char* output_file = binary_output ? "graph_division.bin" : "graph_division.txt";
     if (save_graph_division(output_file, graph, groups, num_parts, binary_output) != 0) {
-        fprintf(stderr, "Warning: Failed to save division to file: %s\n", output_file);
+        fprintf(stderr, "Uwaga: Nie udało się zapisać podziału do pliku: %s\n", output_file);
     } else {
-        printf("Division saved to: %s\n", output_file);
+        printf("Podział zapisano do pliku: %s\n", output_file);
     }
 
     // Zwolnij pamięć
