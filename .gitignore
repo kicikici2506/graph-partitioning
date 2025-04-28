@@ -1,0 +1,17 @@
+# Pliki obiektowe i wykonywalne
+*.o
+*.out
+bin/
+obj/
+
+# Pliki tymczasowe
+*~
+.DS_Store
+
+# Pliki IDE
+.vscode/
+.idea/
+
+# Pliki wyjściowe programu
+graph_division.txt
+graph_division.bin
