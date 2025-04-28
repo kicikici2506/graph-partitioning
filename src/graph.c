@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
+#include <ctype.h>
 #include "../include/graph.h"
 
 #define INITIAL_CAPACITY 16
@@ -74,128 +75,176 @@ void destroy_graph(Graph* graph) {
     free(graph);
 }
 
-// Wczytywanie grafu z pliku
+// Funkcja pomocnicza do wczytywania liczb oddzielonych średnikami
+static int* read_semicolon_separated_numbers(char* line, int* count) {
+    int capacity = INITIAL_CAPACITY;
+    int* numbers = (int*)malloc(capacity * sizeof(int));
+    if (!numbers) return NULL;
+    *count = 0;
+
+    // Usuń znaki białe i '%' z końca linii
+    char* end = line + strlen(line) - 1;
+    while (end > line && (isspace(*end) || *end == '%' || *end == ';')) {
+        *end = '\0';
+        end--;
+    }
+
+    // Zamień wszystkie znaki białe na pojedyncze spacje
+    char* src = line;
+    char* dst = line;
+    int space = 0;
+    while (*src) {
+        if (isspace(*src)) {
+            if (!space) {
+                *dst++ = ' ';
+                space = 1;
+            }
+        } else {
+            *dst++ = *src;
+            space = 0;
+        }
+        src++;
+    }
+    *dst = '\0';
+
+    // Podziel string na tokeny
+    char* token = strtok(line, "; ");
+    while (token) {
+        // Pomiń puste tokeny
+        if (strlen(token) > 0) {
+            if (*count >= capacity) {
+                capacity *= 2;
+                int* new_numbers = (int*)safe_realloc(numbers, capacity * sizeof(int));
+                if (!new_numbers) {
+                    free(numbers);
+                    return NULL;
+                }
+                numbers = new_numbers;
+            }
+            
+            // Konwertuj string na liczbę
+            char* endptr;
+            long val = strtol(token, &endptr, 10);
+            if (*endptr == '\0') {  // Upewnij się, że cały token został przekonwertowany
+                numbers[*count] = (int)val;
+                (*count)++;
+            }
+        }
+        token = strtok(NULL, "; ");
+    }
+
+    return numbers;
+}
+
+// Wczytywanie grafu z pliku w formacie CSRRG
 int load_graph_from_file(const char* filename, Graph** graph) {
     FILE* file = fopen(filename, "r");
     if (!file) return -1;
 
-    char line[MAX_LINE_LENGTH];
-    int max_vertices;
+    char* line = NULL;
+    size_t len = 0;
+    ssize_t read;
 
-    // Wczytaj maksymalną liczbę węzłów w wierszu
-    if (fscanf(file, "%d", &max_vertices) != 1) {
+    // Wczytaj liczbę wierzchołków
+    int num_vertices = 0;
+    if ((read = getline(&line, &len, file)) != -1) {
+        num_vertices = atoi(line);
+    }
+    if (num_vertices <= 0) {
+        free(line);
         fclose(file);
         return -1;
     }
 
-    *graph = create_graph(max_vertices);
+    *graph = create_graph(num_vertices);
     if (!*graph) {
+        free(line);
         fclose(file);
         return -1;
     }
 
-    // Tymczasowe bufory
-    int* temp_vertices = NULL;
-    int* temp_row_pointers = NULL;
-    int temp_capacity = INITIAL_CAPACITY;
-    int vertex_count = 0;
-    int row_count = 0;
-
-    temp_vertices = (int*)malloc(temp_capacity * sizeof(int));
-    temp_row_pointers = (int*)malloc(INITIAL_CAPACITY * sizeof(int));
-    
-    if (!temp_vertices || !temp_row_pointers) {
-        free(temp_vertices);
-        free(temp_row_pointers);
+    // Wczytaj indeksy kolumn
+    if ((read = getline(&line, &len, file)) == -1) {
+        free(line);
         destroy_graph(*graph);
         fclose(file);
         return -1;
     }
 
-    // Wczytaj wierzchołki i wskaźniki wierszy
-    temp_row_pointers[0] = 0;
-    fgets(line, MAX_LINE_LENGTH, file); // Pomiń pozostałą część pierwszej linii
-
-    while (fgets(line, MAX_LINE_LENGTH, file)) {
-        char* token = strtok(line, " \t\n");
-        int vertices_in_row = 0;
-
-        while (token) {
-            int vertex = atoi(token);
-            
-            if (vertex_count >= temp_capacity) {
-                temp_capacity *= 2;
-                int* new_vertices = (int*)safe_realloc(temp_vertices, temp_capacity * sizeof(int));
-                if (!new_vertices) {
-                    free(temp_vertices);
-                    free(temp_row_pointers);
-                    destroy_graph(*graph);
-                    fclose(file);
-                    return -1;
-                }
-                temp_vertices = new_vertices;
-            }
-
-            temp_vertices[vertex_count++] = vertex;
-            vertices_in_row++;
-            token = strtok(NULL, " \t\n");
-        }
-
-        if (vertices_in_row > 0) {
-            row_count++;
-            if (row_count >= INITIAL_CAPACITY) {
-                int* new_row_pointers = (int*)safe_realloc(temp_row_pointers, 
-                                                         (row_count + 1) * sizeof(int));
-                if (!new_row_pointers) {
-                    free(temp_vertices);
-                    free(temp_row_pointers);
-                    destroy_graph(*graph);
-                    fclose(file);
-                    return -1;
-                }
-                temp_row_pointers = new_row_pointers;
-            }
-            temp_row_pointers[row_count] = vertex_count;
-        }
+    int col_count;
+    int* col_indices = read_semicolon_separated_numbers(line, &col_count);
+    if (!col_indices) {
+        free(line);
+        destroy_graph(*graph);
+        fclose(file);
+        return -1;
     }
 
-    // Ustaw dane w grafie
-    (*graph)->total_vertices = vertex_count;
-    (*graph)->num_rows = row_count;
-    (*graph)->vertex_indices = temp_vertices;
-    (*graph)->row_pointers = temp_row_pointers;
+    // Wczytaj wskaźniki wierszy
+    if ((read = getline(&line, &len, file)) == -1) {
+        free(line);
+        free(col_indices);
+        destroy_graph(*graph);
+        fclose(file);
+        return -1;
+    }
+
+    int row_count;
+    (*graph)->row_pointers = read_semicolon_separated_numbers(line, &row_count);
+    if (!(*graph)->row_pointers || row_count != num_vertices + 1) {
+        free(line);
+        free(col_indices);
+        destroy_graph(*graph);
+        fclose(file);
+        return -1;
+    }
+
+    // Wczytaj wartości (opcjonalne)
+    if ((read = getline(&line, &len, file)) != -1) {
+        // Ignorujemy wartości, ale sprawdzamy czy są poprawne
+        int val_count;
+        int* values = read_semicolon_separated_numbers(line, &val_count);
+        if (values) free(values);
+    }
+
+    // Inicjalizuj struktury grafu
+    (*graph)->total_vertices = num_vertices;
+    (*graph)->vertex_indices = (int*)malloc(num_vertices * sizeof(int));
+    (*graph)->adj_list = (AdjacencyList*)malloc(num_vertices * sizeof(AdjacencyList));
+    
+    if (!(*graph)->vertex_indices || !(*graph)->adj_list) {
+        free(line);
+        free(col_indices);
+        destroy_graph(*graph);
+        fclose(file);
+        return -1;
+    }
+
+    // Inicjalizuj vertex_indices
+    for (int i = 0; i < num_vertices; i++) {
+        (*graph)->vertex_indices[i] = i;
+    }
 
     // Inicjalizuj listy sąsiedztwa
-    (*graph)->adj_list = (AdjacencyList*)malloc(vertex_count * sizeof(AdjacencyList));
-    if (!(*graph)->adj_list) {
-        destroy_graph(*graph);
-        fclose(file);
-        return -1;
-    }
-
-    for (int i = 0; i < vertex_count; i++) {
+    for (int i = 0; i < num_vertices; i++) {
         if (init_adjacency_list(&(*graph)->adj_list[i]) != 0) {
+            free(line);
+            free(col_indices);
             destroy_graph(*graph);
             fclose(file);
             return -1;
         }
     }
 
-    // Wczytaj połączenia
-    rewind(file);
-    while (fgets(line, MAX_LINE_LENGTH, file)) {
-        int v1, v2;
-        if (sscanf(line, "%d %d", &v1, &v2) == 2) {
-            // Znajdź indeksy wierzchołków
-            int idx1 = -1, idx2 = -1;
-            for (int i = 0; i < vertex_count; i++) {
-                if ((*graph)->vertex_indices[i] == v1) idx1 = i;
-                if ((*graph)->vertex_indices[i] == v2) idx2 = i;
-            }
-            
-            if (idx1 >= 0 && idx2 >= 0) {
-                if (add_neighbor(&(*graph)->adj_list[idx1], idx2) != 0 ||
-                    add_neighbor(&(*graph)->adj_list[idx2], idx1) != 0) {
+    // Konwertuj format CSR na listy sąsiedztwa
+    for (int i = 0; i < num_vertices; i++) {
+        int start = (*graph)->row_pointers[i];
+        int end = (*graph)->row_pointers[i + 1];
+        for (int j = start; j < end; j++) {
+            if (j < col_count) {  // Dodane zabezpieczenie przed wyjściem poza zakres
+                if (add_neighbor(&(*graph)->adj_list[i], col_indices[j]) != 0) {
+                    free(line);
+                    free(col_indices);
                     destroy_graph(*graph);
                     fclose(file);
                     return -1;
@@ -204,6 +253,8 @@ int load_graph_from_file(const char* filename, Graph** graph) {
         }
     }
 
+    free(line);
+    free(col_indices);
     fclose(file);
     return 0;
 }
@@ -323,8 +374,9 @@ int divide_graph(Graph* graph, int num_parts, double margin_percentage, VertexGr
     }
 
     // Alokuj pamięć na struktury pomocnicze
-    GainInfo* gains1 = (GainInfo*)malloc(graph->total_vertices * sizeof(GainInfo));
-    GainInfo* gains2 = (GainInfo*)malloc(graph->total_vertices * sizeof(GainInfo));
+    size_t max_pairs = (size_t)graph->total_vertices * graph->total_vertices;  // Maksymalna możliwa liczba par
+    GainInfo* gains1 = (GainInfo*)malloc(max_pairs * sizeof(GainInfo));
+    GainInfo* gains2 = (GainInfo*)malloc(max_pairs * sizeof(GainInfo));
     bool* locked = (bool*)calloc(graph->total_vertices, sizeof(bool));
     
     if (!gains1 || !gains2 || !locked) {
