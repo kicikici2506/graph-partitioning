@@ -74,6 +74,11 @@ int main(int argc, char *argv[]) {
 
     // Podziel graf
     VertexGroup* groups = NULL;
+    if (graph->total_vertices > 1000) {
+        printf("\nRozpoczynam podział dużego grafu (%d wierzchołków)...\n", graph->total_vertices);
+        printf("To może potrwać kilka minut. Proszę czekać...\n\n");
+    }
+    
     if (divide_graph(graph, num_parts, margin_percentage, &groups) != 0) {
         fprintf(stderr, "Błąd: Nie udało się podzielić grafu\n");
         destroy_graph(graph);

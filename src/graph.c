@@ -373,10 +373,12 @@ int divide_graph(Graph* graph, int num_parts, double margin_percentage, VertexGr
         }
     }
 
-    // Alokuj pamięć na struktury pomocnicze
-    size_t max_pairs = (size_t)graph->total_vertices * graph->total_vertices;  // Maksymalna możliwa liczba par
-    GainInfo* gains1 = (GainInfo*)malloc(max_pairs * sizeof(GainInfo));
-    GainInfo* gains2 = (GainInfo*)malloc(max_pairs * sizeof(GainInfo));
+    // Alokuj pamięć na struktury pomocnicze - zoptymalizowana wersja
+    int max_batch_size = 1000; // Maksymalny rozmiar partii do przetwarzania
+    int batch_size = graph->total_vertices < max_batch_size ? graph->total_vertices : max_batch_size;
+    
+    GainInfo* gains1 = (GainInfo*)malloc(batch_size * sizeof(GainInfo));
+    GainInfo* gains2 = (GainInfo*)malloc(batch_size * sizeof(GainInfo));
     bool* locked = (bool*)calloc(graph->total_vertices, sizeof(bool));
     
     if (!gains1 || !gains2 || !locked) {
@@ -390,7 +392,8 @@ int divide_graph(Graph* graph, int num_parts, double margin_percentage, VertexGr
 
     // Iteracyjna optymalizacja podziału
     bool improved;
-    int max_passes = 10; // Maksymalna liczba przejść
+    // Dostosuj liczbę przejść do rozmiaru grafu
+    int max_passes = (int)(5 + log(graph->total_vertices) / log(2));
     int pass = 0;
 
     do {
@@ -398,8 +401,8 @@ int divide_graph(Graph* graph, int num_parts, double margin_percentage, VertexGr
         pass++;
 
         // Dla każdej pary grup
-        for (int i = 0; i < num_parts; i++) {
-            for (int j = i + 1; j < num_parts; j++) {
+        for (int i = 0; i < num_parts && !improved; i++) {
+            for (int j = i + 1; j < num_parts && !improved; j++) {
                 VertexGroup* group1 = &(*groups)[i];
                 VertexGroup* group2 = &(*groups)[j];
                 
@@ -410,65 +413,60 @@ int divide_graph(Graph* graph, int num_parts, double margin_percentage, VertexGr
                 int best_total_gain = 0;
                 int best_k = 0;
                 
-                // Znajdź najlepszą sekwencję zamian
-                for (int k = 0; k < group1->count && k < group2->count; k++) {
-                    // Oblicz zyski dla wszystkich możliwych par
-                    int gains_count1 = 0;
-                    int gains_count2 = 0;
+                // Przetwarzaj wierzchołki partiami
+                for (int k = 0; k < group1->count && k < group2->count; k += batch_size) {
+                    int current_batch_size = batch_size;
+                    if (k + batch_size > group1->count || k + batch_size > group2->count) {
+                        current_batch_size = (group1->count < group2->count) ? 
+                                           group1->count - k : group2->count - k;
+                    }
                     
-                    for (int v1 = 0; v1 < group1->count; v1++) {
+                    // Oblicz zyski dla bieżącej partii
+                    int gains_count = 0;
+                    for (int v1 = k; v1 < k + current_batch_size && v1 < group1->count; v1++) {
                         if (!locked[group1->vertices[v1]]) {
-                            for (int v2 = 0; v2 < group2->count; v2++) {
+                            for (int v2 = k; v2 < k + current_batch_size && v2 < group2->count; v2++) {
                                 if (!locked[group2->vertices[v2]]) {
                                     int gain = calculate_pair_gain(graph, 
                                         group1->vertices[v1], 
                                         group2->vertices[v2],
                                         group1, group2);
                                         
-                                    gains1[gains_count1].vertex = v1;
-                                    gains1[gains_count1].gain = gain;
-                                    gains_count1++;
-                                    
-                                    gains2[gains_count2].vertex = v2;
-                                    gains2[gains_count2].gain = gain;
-                                    gains_count2++;
+                                    if (gains_count < batch_size) {
+                                        gains1[gains_count].vertex = v1;
+                                        gains2[gains_count].vertex = v2;
+                                        gains1[gains_count].gain = gain;
+                                        gains_count++;
+                                    }
                                 }
                             }
                         }
                     }
                     
-                    if (gains_count1 == 0 || gains_count2 == 0) break;
+                    if (gains_count == 0) continue;
                     
                     // Sortuj według zysków
-                    qsort(gains1, gains_count1, sizeof(GainInfo), compare_gains);
-                    qsort(gains2, gains_count2, sizeof(GainInfo), compare_gains);
+                    qsort(gains1, gains_count, sizeof(GainInfo), compare_gains);
                     
                     // Wybierz najlepszą parę
                     int best_gain = gains1[0].gain;
                     int best_v1 = gains1[0].vertex;
                     int best_v2 = gains2[0].vertex;
                     
-                    // Wykonaj zamianę
-                    swap_vertices(group1, best_v1, group2, best_v2);
-                    locked[group1->vertices[best_v1]] = true;
-                    locked[group2->vertices[best_v2]] = true;
-                    
-                    total_gain += best_gain;
-                    
-                    // Aktualizuj najlepszy wynik
-                    if (total_gain > best_total_gain) {
-                        best_total_gain = total_gain;
-                        best_k = k + 1;
-                    }
-                }
-                
-                // Jeśli znaleziono poprawę, zastosuj ją
-                if (best_total_gain > 0) {
-                    improved = true;
-                    
-                    // Przywróć najlepszą konfigurację
-                    for (int k = best_k; k < group1->count && k < group2->count; k++) {
-                        swap_vertices(group1, k, group2, k);
+                    // Wykonaj zamianę tylko jeśli jest korzystna
+                    if (best_gain > 0) {
+                        swap_vertices(group1, best_v1, group2, best_v2);
+                        locked[group1->vertices[best_v1]] = true;
+                        locked[group2->vertices[best_v2]] = true;
+                        
+                        total_gain += best_gain;
+                        improved = true;
+                        
+                        // Aktualizuj najlepszy wynik
+                        if (total_gain > best_total_gain) {
+                            best_total_gain = total_gain;
+                            best_k = k + 1;
+                        }
                     }
                 }
             }
