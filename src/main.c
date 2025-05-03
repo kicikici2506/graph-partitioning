@@ -5,12 +5,13 @@
 #include "../include/graph.h"
 
 void print_usage(const char* program_name) {
-    printf("Użycie: %s -i plik_wejściowy.csrrg -o plik_wyjściowy.txt -p liczba_części -m margines\n\n", program_name);
+    printf("Użycie: %s -i plik_wejściowy.csrrg -o plik_wyjściowy.txt -p liczba_części -m margines [-b]\n\n", program_name);
     printf("Opcje:\n");
     printf("  -i plik_wejściowy   Ścieżka do pliku wejściowego w formacie CSRRG\n");
     printf("  -o plik_wyjściowy   Ścieżka do pliku wyjściowego (domyślnie: output.txt)\n");
     printf("  -p liczba_części    Liczba części na które podzielić graf (domyślnie: 2)\n");
     printf("  -m margines         Maksymalna dozwolona różnica wielkości między częściami w %% (domyślnie: 20)\n");
+    printf("  -b                  Zapisz wynik w formacie binarnym\n");
     printf("  -h                  Wyświetl tę pomoc\n");
 }
 
@@ -20,10 +21,11 @@ int main(int argc, char *argv[]) {
     const char* output_file = "output.txt";
     int num_parts = 2;
     double margin_percentage = 20.0;
+    bool binary_output = false;
     
     // Parsowanie argumentów
     int opt;
-    while ((opt = getopt(argc, argv, "hi:o:p:m:")) != -1) {
+    while ((opt = getopt(argc, argv, "hi:o:p:m:b")) != -1) {
         switch (opt) {
             case 'h':
                 print_usage(argv[0]);
@@ -47,6 +49,9 @@ int main(int argc, char *argv[]) {
                     fprintf(stderr, "Błąd: Margines procentowy nie może być ujemny\n");
                     return 1;
                 }
+                break;
+            case 'b':
+                binary_output = true;
                 break;
             default:
                 print_usage(argv[0]);
@@ -101,7 +106,7 @@ int main(int argc, char *argv[]) {
     printf("Różnica wielkości między grupami: %.2f%%\n", size_diff);
 
     // Zapisz wynik do pliku
-    if (save_graph_division(output_file, graph, groups, num_parts, false) != 0) {
+    if (save_graph_division(output_file, graph, groups, num_parts, binary_output) != 0) {
         fprintf(stderr, "Błąd: Nie udało się zapisać podziału do pliku: %s\n", output_file);
     } else {
         printf("\nPodział zapisano do pliku: %s\n", output_file);
