@@ -6,32 +6,39 @@
 #include <ctype.h>
 #include "../include/graph.h"
 
-#define INITIAL_CAPACITY 16
-#define MAX_LINE_LENGTH 1024
+// Stałe definiujące początkowe rozmiary i limity
+#define INITIAL_CAPACITY 16    // Początkowy rozmiar tablicy sąsiadów
+#define MAX_LINE_LENGTH 1024   // Maksymalna długość linii w pliku
 
-
-// Tworzenie nowego grafu
+// Funkcja tworząca nowy graf o określonej maksymalnej liczbie wierzchołków
+// Parametr max_vertices określa maksymalną liczbę wierzchołków, które może zawierać graf
+// Zwraca wskaźnik do nowo utworzonego grafu lub NULL w przypadku błędu alokacji
 Graph* create_graph(int max_vertices) {
     Graph* graph = (Graph*)malloc(sizeof(Graph));
     if (!graph) return NULL;
 
-    graph->max_vertices = max_vertices;
-    graph->total_vertices = 0;
-    graph->num_rows = 0;
-    graph->vertex_indices = NULL;
-    graph->row_pointers = NULL;
-    graph->adj_list = NULL;
+    // Inicjalizacja pól struktury grafu
+    graph->max_vertices = max_vertices;  // Maksymalna liczba wierzchołków
+    graph->total_vertices = 0;           // Aktualna liczba wierzchołków
+    graph->num_rows = 0;                 // Liczba wierszy w macierzy sąsiedztwa
+    graph->vertex_indices = NULL;        // Tablica indeksów wierzchołków
+    graph->row_pointers = NULL;          // Wskaźniki do wierszy w formacie CSR
+    graph->adj_list = NULL;              // Listy sąsiedztwa dla każdego wierzchołka
 
     return graph;
 }
 
-// Zwalnianie pamięci grafu
+// Funkcja zwalniająca pamięć zajmowaną przez graf
+// Rekurencyjnie zwalnia wszystkie struktury danych związane z grafem
 void destroy_graph(Graph* graph) {
     if (!graph) return;
 
+    // Zwolnienie tablicy indeksów wierzchołków
     if (graph->vertex_indices) free(graph->vertex_indices);
+    // Zwolnienie wskaźników do wierszy
     if (graph->row_pointers) free(graph->row_pointers);
     
+    // Zwolnienie list sąsiedztwa dla każdego wierzchołka
     if (graph->adj_list) {
         for (int i = 0; i < graph->total_vertices; i++) {
             if (graph->adj_list[i].neighbors) {
@@ -41,6 +48,7 @@ void destroy_graph(Graph* graph) {
         free(graph->adj_list);
     }
 
+    // Zwolnienie struktury grafu
     free(graph);
 }
 
@@ -53,7 +61,7 @@ int load_graph_from_file(const char* filename, Graph** graph) {
     size_t len = 0;
     ssize_t read;
 
-    // Wczytaj liczbę wierzchołków
+    // Wczytanie liczby wierzchołków z pierwszej linii pliku
     int num_vertices = 0;
     if ((read = getline(&line, &len, file)) != -1) {
         num_vertices = atoi(line);
@@ -64,6 +72,7 @@ int load_graph_from_file(const char* filename, Graph** graph) {
         return -1;
     }
 
+    // Utworzenie nowego grafu o odpowiednim rozmiarze
     *graph = create_graph(num_vertices);
     if (!*graph) {
         free(line);
@@ -71,7 +80,8 @@ int load_graph_from_file(const char* filename, Graph** graph) {
         return -1;
     }
 
-    // Wczytaj indeksy kolumn
+    // Wczytanie indeksów kolumn z drugiej linii pliku
+    // Indeksy kolumn określają sąsiadów dla każdego wierzchołka
     if ((read = getline(&line, &len, file)) == -1) {
         free(line);
         destroy_graph(*graph);
@@ -88,7 +98,8 @@ int load_graph_from_file(const char* filename, Graph** graph) {
         return -1;
     }
 
-    // Wczytaj wskaźniki wierszy
+    // Wczytanie wskaźników wierszy z trzeciej linii pliku
+    // Wskaźniki określają początek i koniec listy sąsiadów dla każdego wierzchołka
     if ((read = getline(&line, &len, file)) == -1) {
         free(line);
         free(col_indices);
@@ -107,15 +118,15 @@ int load_graph_from_file(const char* filename, Graph** graph) {
         return -1;
     }
 
-    // Wczytaj wartości (opcjonalne)
+    // Opcjonalne wczytanie wartości (czwarta linia pliku)
+    // Wartości mogą reprezentować wagi krawędzi
     if ((read = getline(&line, &len, file)) != -1) {
-        // Ignorujemy wartości, ale sprawdzamy czy są poprawne
         int val_count;
         int* values = read_semicolon_separated_numbers(line, &val_count);
         if (values) free(values);
     }
 
-    // Inicjalizuj struktury grafu
+    // Inicjalizacja struktur grafu
     (*graph)->total_vertices = num_vertices;
     (*graph)->vertex_indices = (int*)malloc(num_vertices * sizeof(int));
     (*graph)->adj_list = (AdjacencyList*)malloc(num_vertices * sizeof(AdjacencyList));
@@ -128,12 +139,14 @@ int load_graph_from_file(const char* filename, Graph** graph) {
         return -1;
     }
 
-    // Inicjalizuj vertex_indices
+    // Inicjalizacja indeksów wierzchołków
+    // Każdy wierzchołek otrzymuje unikalny indeks
     for (int i = 0; i < num_vertices; i++) {
         (*graph)->vertex_indices[i] = i;
     }
 
-    // Inicjalizuj listy sąsiedztwa
+    // Inicjalizacja list sąsiedztwa dla każdego wierzchołka
+    // Każdy wierzchołek otrzymuje pustą listę sąsiadów
     for (int i = 0; i < num_vertices; i++) {
         if (init_adjacency_list(&(*graph)->adj_list[i]) != 0) {
             free(line);
@@ -144,12 +157,15 @@ int load_graph_from_file(const char* filename, Graph** graph) {
         }
     }
 
-    // Konwertuj format CSR na listy sąsiedztwa
+    // Konwersja formatu CSR na listy sąsiedztwa
+    // Dla każdego wierzchołka:
+    // 1. Określamy zakres jego sąsiadów w tablicy col_indices
+    // 2. Dodajemy każdego sąsiada do listy sąsiedztwa
     for (int i = 0; i < num_vertices; i++) {
         int start = (*graph)->row_pointers[i];
         int end = (*graph)->row_pointers[i + 1];
         for (int j = start; j < end; j++) {
-            if (j < col_count) {  // Dodane zabezpieczenie przed wyjściem poza zakres
+            if (j < col_count) {  // Zabezpieczenie przed wyjściem poza zakres
                 if (add_neighbor(&(*graph)->adj_list[i], col_indices[j]) != 0) {
                     free(line);
                     free(col_indices);
@@ -174,7 +190,7 @@ int save_graph_division(const char* filename, const Graph* graph,
     if (!file) return -1;
 
     if (binary_output) {
-        // Zapisz w formacie binarnym
+        // Zapis w formacie binarnym
         fwrite(&num_groups, sizeof(int), 1, file);
         for (int i = 0; i < num_groups; i++) {
             fwrite(&groups[i].count, sizeof(int), 1, file);
@@ -184,7 +200,7 @@ int save_graph_division(const char* filename, const Graph* graph,
             }
         }
     } else {
-        // Zapisz w formacie tekstowym
+        // Zapis w formacie tekstowym
         fprintf(file, "%d\n", num_groups);
         for (int i = 0; i < num_groups; i++) {
             fprintf(file, "Group %d (%d vertices):", i + 1, groups[i].count);
@@ -207,14 +223,14 @@ int load_graph_division(const char* filename, VertexGroup** groups, int* num_gro
         return -1;
     }
 
-    // Odczytaj liczbę grup
+    // Odczytanie liczby grup z pliku
     if (fread(num_groups, sizeof(int), 1, file) != 1) {
         fprintf(stderr, "Błąd: Nie można odczytać liczby grup\n");
         fclose(file);
         return -1;
     }
 
-    // Alokuj pamięć na grupy
+    // Alokacja pamięci na grupy wierzchołków
     *groups = (VertexGroup*)malloc(*num_groups * sizeof(VertexGroup));
     if (!*groups) {
         fprintf(stderr, "Błąd: Nie można zaalokować pamięci na grupy\n");
@@ -222,9 +238,9 @@ int load_graph_division(const char* filename, VertexGroup** groups, int* num_gro
         return -1;
     }
 
-    // Odczytaj dane dla każdej grupy
+    // Odczytanie danych dla każdej grupy
     for (int i = 0; i < *num_groups; i++) {
-        // Odczytaj liczbę wierzchołków w grupie
+        // Odczytanie liczby wierzchołków w grupie
         if (fread(&(*groups)[i].count, sizeof(int), 1, file) != 1) {
             fprintf(stderr, "Błąd: Nie można odczytać liczby wierzchołków w grupie %d\n", i);
             for (int j = 0; j < i; j++) free((*groups)[j].vertices);
@@ -233,7 +249,7 @@ int load_graph_division(const char* filename, VertexGroup** groups, int* num_gro
             return -1;
         }
 
-        // Alokuj pamięć na wierzchołki
+        // Alokacja pamięci na wierzchołki grupy
         (*groups)[i].vertices = (int*)malloc((*groups)[i].count * sizeof(int));
         if (!(*groups)[i].vertices) {
             fprintf(stderr, "Błąd: Nie można zaalokować pamięci na wierzchołki grupy %d\n", i);
@@ -243,7 +259,7 @@ int load_graph_division(const char* filename, VertexGroup** groups, int* num_gro
             return -1;
         }
 
-        // Odczytaj wierzchołki
+        // Odczytanie wierzchołków grupy
         if (fread((*groups)[i].vertices, sizeof(int), (*groups)[i].count, file) != (*groups)[i].count) {
             fprintf(stderr, "Błąd: Nie można odczytać wierzchołków grupy %d\n", i);
             for (int j = 0; j <= i; j++) free((*groups)[j].vertices);

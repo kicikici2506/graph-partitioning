@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include "../include/graph.h"
 
+// Funkcja wyświetlająca instrukcję użycia programu
 void print_usage(const char* program_name) {
     printf("Użycie: %s -i plik_wejściowy.csrrg -o plik_wyjściowy.txt -p liczba_części -m margines [-b]\n\n", program_name);
     printf("Opcje:\n");
@@ -16,14 +17,14 @@ void print_usage(const char* program_name) {
 }
 
 int main(int argc, char *argv[]) {
-    // Wartości domyślne
-    const char* input_file = NULL;
-    const char* output_file = "output.txt";
-    int num_parts = 2;
-    double margin_percentage = 20.0;
-    bool binary_output = false;
+    // Inicjalizacja zmiennych z wartościami domyślnymi
+    const char* input_file = NULL;        // Ścieżka do pliku wejściowego
+    const char* output_file = "output.txt"; // Domyślna ścieżka do pliku wyjściowego
+    int num_parts = 2;                    // Domyślna liczba części grafu
+    double margin_percentage = 20.0;      // Domyślny margines procentowy
+    bool binary_output = false;           // Flaga określająca format wyjściowy
     
-    // Parsowanie argumentów
+    // Parsowanie argumentów wiersza poleceń
     int opt;
     while ((opt = getopt(argc, argv, "hi:o:p:m:b")) != -1) {
         switch (opt) {
@@ -59,25 +60,25 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Sprawdź czy podano plik wejściowy
+    // Sprawdzenie czy podano wymagany plik wejściowy
     if (!input_file) {
         fprintf(stderr, "Błąd: Nie podano pliku wejściowego (-i)\n");
         print_usage(argv[0]);
         return 1;
     }
 
-    // Wczytaj graf
+    // Wczytanie grafu z pliku
     Graph* graph = NULL;
     if (load_graph_from_file(input_file, &graph) != 0) {
         fprintf(stderr, "Błąd: Nie udało się wczytać grafu z pliku: %s\n", input_file);
         return 1;
     }
 
-    // Wyświetl informacje o grafie
+    // Wyświetlenie informacji o wczytanym grafie
     printf("Wczytano graf z pliku: %s\n", input_file);
     print_graph_info(graph);
 
-    // Podziel graf
+    // Podział grafu na określoną liczbę części
     VertexGroup* groups = NULL;
     if (graph->total_vertices > 1000) {
         printf("\nRozpoczynam podział dużego grafu (%d wierzchołków)...\n", graph->total_vertices);
@@ -90,29 +91,29 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Sprawdź różnicę rozmiaru między grupami
+    // Obliczenie różnicy rozmiaru między grupami
     double size_diff = calculate_size_difference(groups, num_parts);
     if (size_diff > margin_percentage) {
         printf("Uwaga: Różnica wielkości (%.2f%%) przekracza określony margines (%.2f%%)\n",
                size_diff, margin_percentage);
     }
 
-    // Oblicz liczbę krawędzi między grupami
+    // Obliczenie liczby krawędzi między grupami
     int cross_edges = calculate_edges_between_groups(graph, groups, num_parts);
 
-    // Wyświetl informacje o podziale
+    // Wyświetlenie informacji o podziale
     print_division_info(groups, num_parts);
     printf("Liczba krawędzi między grupami: %d\n", cross_edges);
     printf("Różnica wielkości między grupami: %.2f%%\n", size_diff);
 
-    // Zapisz wynik do pliku
+    // Zapisanie wyniku podziału do pliku
     if (save_graph_division(output_file, graph, groups, num_parts, binary_output) != 0) {
         fprintf(stderr, "Błąd: Nie udało się zapisać podziału do pliku: %s\n", output_file);
     } else {
         printf("\nPodział zapisano do pliku: %s\n", output_file);
     }
 
-    // Zwolnij pamięć
+    // Zwolnienie zaalokowanej pamięci
     for (int i = 0; i < num_parts; i++) {
         free(groups[i].vertices);
     }
